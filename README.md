@@ -29,12 +29,6 @@ This widely adopted authentication scheme involves transmitting user credentials
 import requests
 import sys
 
-# --- User-configurable values ---
-INSTANCE_NAME = "your-instance"
-API_ENDPOINT = f"https://{INSTANCE_NAME}.app.com/api/v1/data"
-USERNAME = "your_username"
-PASSWORD = "your_password"
-
 try:
     print(f"Connecting to {API_ENDPOINT}...")
     response = requests.get(API_ENDPOINT, auth=(USERNAME, PASSWORD))
