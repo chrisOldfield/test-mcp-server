@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive NL2SQL Simulation with Gemini API</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .log-panel {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+        .log-panel .log-entry {
+            border-left: 2px solid;
+            padding-left: 12px;
+            margin-bottom: 8px;
+        }
+        .log-entry.server { border-color: #3b82f6; } /* blue-500 */
+        .log-entry.agent { border-color: #10b981; } /* emerald-500 */
+        .log-entry.app { border-color: #f97316; } /* orange-500 */
+        .log-entry.result { border-color: #8b5cf6; } /* violet-500 */
+        .log-entry.gemini { border-color: #ec4899; } /* pink-500 */
+
+        .code-block {
+            background-color: #1f2937; /* gray-800 */
+            color: #d1d5db; /* gray-300 */
+            padding: 1rem;
+            border-radius: 0.5rem;
+            overflow-x: auto;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .code-block .keyword { color: #f97316; }
+        .code-block .string { color: #a3e635; }
+        .code-block .comment { color: #6b7280; }
+        .code-block .function { color: #38bdf8; }
+        .code-block .variable { color: #e5e7eb; }
+        .code-block .decorator { color: #fbbf24; }
+        
+        .gemini-btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+        .suggestion-btn {
+            background-color: #e5e7eb;
+            color: #374151;
+            padding: 6px 12px;
+            border-radius: 9999px;
+            font-size: 0.875rem;
+            transition: background-color 0.2s;
+        }
+        .suggestion-btn:hover {
+            background-color: #d1d5db;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8">
+        <header class="text-center mb-8">
+            <h1 class="text-3xl md:text-4xl font-bold text-gray-900">Interactive NL2SQL Simulation ✨</h1>
+            <p class="mt-2 text-lg text-gray-600">An AI Agent that queries a database and uses the Gemini API for suggestions and summaries.</p>
+        </header>
+
+        <!-- Main Application -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-12">
+            
+            <div id="simulated-app" class="mb-6">
+                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">1. Your Application</h2>
+                <label for="user-query" class="block text-md font-medium text-gray-700 mb-2">Enter your natural language query about customer data:</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="user-query" class="flex-grow p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500" placeholder="e.g., Show me all customers from California">
+                    <button id="submit-query" class="bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-200">Submit Query</button>
+                    <button id="suggest-queries" class="gemini-btn bg-pink-500 text-white font-bold py-3 px-4 rounded-lg hover:bg-pink-600 transition duration-200 flex items-center justify-center">
+                        <span class="mr-2">Suggest Queries ✨</span>
+                        <svg id="suggest-loader" class="animate-spin h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                    </button>
+                </div>
+                <div id="suggestions-container" class="mt-4 flex flex-wrap gap-2"></div>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-6">
+                <div>
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">2. Simulation Logs</h2>
+                    <div class="bg-gray-50 p-4 rounded-lg h-96 overflow-y-auto log-panel" id="log-output"><div class="text-gray-500">Logs will appear here...</div></div>
+                </div>
+                <div>
+                    <h2 class="text-2xl font-semibold mb-4 border-b pb-2">3. Final Results</h2>
+                    <div class="bg-gray-900 text-white p-4 rounded-lg h-96 overflow-y-auto log-panel" id="result-output"><div class="text-gray-400">Results will be displayed here...</div></div>
+                    <div id="summary-section" class="mt-4 hidden">
+                         <button id="summarize-results" class="gemini-btn w-full bg-purple-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-purple-700 transition duration-200 flex items-center justify-center">
+                            <span class="mr-2">Summarize Results ✨</span>
+                            <svg id="summarize-loader" class="animate-spin h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+                        </button>
+                        <div id="summary-output" class="mt-4 bg-purple-50 border border-purple-200 p-4 rounded-lg text-gray-700"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+
+    <script>
+        // --- Gemini API Integration ---
+        const geminiAPI = {
+            log: (message) => {
+                const logOutput = document.getElementById('log-output');
+                logOutput.innerHTML += `<div class="log-entry gemini"><strong>[Gemini API]:</strong> ${message}</div>`;
+                logOutput.scrollTop = logOutput.scrollHeight;
+            },
+            call: async function(prompt, jsonSchema = null) {
+                this.log("Preparing to call Gemini API...");
+                const apiKey = ""; // Left empty as per instructions
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+                
+                const payload = {
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                };
+
+                if (jsonSchema) {
+                    payload.generationConfig = {
+                        responseMimeType: "application/json",
+                        responseSchema: jsonSchema
+                    };
+                }
+
+                try {
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorBody = await response.text();
+                        throw new Error(`API call failed with status ${response.status}: ${errorBody}`);
+                    }
+                    
+                    const result = await response.json();
+                    this.log("Successfully received response.");
+
+                    if (result.candidates && result.candidates[0].content && result.candidates[0].content.parts[0]) {
+                        const responseText = result.candidates[0].content.parts[0].text;
+                        return jsonSchema ? JSON.parse(responseText) : responseText;
+                    } else {
+                        throw new Error("Invalid response structure from Gemini API.");
+                    }
+                } catch (error) {
+                    this.log(`Error calling Gemini API: ${error.message}`);
+                    console.error("Gemini API Error:", error);
+                    return null;
+                }
+            }
+        };
+
+        // --- MCP Server Simulation ---
+        const mcpServer = {
+            log: (message) => {
+                const logOutput = document.getElementById('log-output');
+                logOutput.innerHTML += `<div class="log-entry server"><strong>[MCP Server]:</strong> ${message}</div>`;
+                logOutput.scrollTop = logOutput.scrollHeight;
+            },
+            execute_mysql_query_mock: function(sql_query) {
+                this.log(`Executing SQL (mock): '${sql_query.trim()}'`);
+                if (sql_query.includes("state = 'CA'")) return [{ "first_name": "Alice", "last_name": "Smith" }, { "first_name": "Charlie", "last_name": "Brown" }];
+                if (sql_query.includes("COUNT(*)")) return [{ "count": 4 }];
+                if (sql_query.includes("LIMIT 5")) return [{"customer_id": 1, "first_name": "Alice", "city": "Los Angeles"}, {"customer_id": 2, "first_name": "Bob", "city": "New York"}, {"customer_id": 3, "first_name": "Charlie", "city": "Los Angeles"}, {"customer_id": 4, "first_name": "Diana", "city": "Miami"}];
+                if (sql_query.includes("LIMIT 3")) return [{"customer_id": 1, "first_name": "Alice"}, {"customer_id": 2, "first_name": "Bob"}, {"customer_id": 3, "first_name": "Charlie"}];
+                return [{ "message": "No specific data for this query." }];
+            },
+            query_customer_data_tool: function(sql_query) {
+                if (!sql_query) return { status: "error", message: "Missing 'sql_query'." };
+                return { status: "success", data: this.execute_mysql_query_mock(sql_query) };
+            },
+            get_customer_schema_resource: function() {
+                this.log("Request for customer_schema resource.");
+                return {
+                    tables: { Customers: { columns: { "customer_id": "INT", "first_name": "VARCHAR(50)", "last_name": "VARCHAR(50)", "city": "VARCHAR(100)", "state": "VARCHAR(50)" }, description: "Customer info." }, Orders: { columns: { "order_id": "INT", "customer_id": "INT", "order_date": "DATE" }, description: "Order info." } },
+                    relationships: ["Customers.customer_id is FK in Orders.customer_id"]
+                };
+            }
+        };
+
+        // --- AI Agent Simulation ---
+        class AIAgent {
+            constructor() {
+                this.logOutput = document.getElementById('log-output');
+                this.schema = mcpServer.get_customer_schema_resource();
+            }
+            log(message) {
+                this.logOutput.innerHTML += `<div class="log-entry agent"><strong>[AI Agent]:</strong> ${message}</div>`;
+                this.logOutput.scrollTop = this.logOutput.scrollHeight;
+            }
+            _natural_language_to_sql(nlq) {
+                this.log(`Translating NLQ to SQL: '${nlq}'`);
+                const q = nlq.toLowerCase();
+                if (q.includes("california")) return "SELECT first_name, last_name FROM Customers WHERE state = 'CA';";
+                if (q.includes("total") && q.includes("customers")) return "SELECT COUNT(*) FROM Customers;";
+                if (q.includes("list") && q.includes("details")) return "SELECT customer_id, first_name, last_name, city, state FROM Customers LIMIT 5;";
+                return "SELECT customer_id, first_name, last_name FROM Customers LIMIT 3;";
+            }
+            query_customer_data(nlq) {
+                const sql = this._natural_language_to_sql(nlq);
+                this.log(`Generated SQL: '${sql.trim()}'`);
+                this.log("Sending SQL to MCP Server...");
+                return mcpServer.query_customer_data_tool(sql);
+            }
+        }
+
+        // --- Main Application Logic ---
+        document.addEventListener('DOMContentLoaded', () => {
+            const agent = new AIAgent();
+            let lastQuery = "";
+            let lastResult = null;
+
+            const queryInput = document.getElementById('user-query');
+            const submitButton = document.getElementById('submit-query');
+            const suggestButton = document.getElementById('suggest-queries');
+            const suggestLoader = document.getElementById('suggest-loader');
+            const suggestionsContainer = document.getElementById('suggestions-container');
+            
+            const logOutput = document.getElementById('log-output');
+            const resultOutput = document.getElementById('result-output');
+            const summarySection = document.getElementById('summary-section');
+            const summarizeButton = document.getElementById('summarize-results');
+            const summarizeLoader = document.getElementById('summarize-loader');
+            const summaryOutput = document.getElementById('summary-output');
+
+            const logToApp = (message) => {
+                 logOutput.innerHTML += `<div class="log-entry app"><strong>[Application]:</strong> ${message}</div>`;
+                 logOutput.scrollTop = logOutput.scrollHeight;
+            }
+
+            const processQuery = () => {
+                const user_query = queryInput.value;
+                if (!user_query) { alert("Please enter a query."); return; }
+
+                logOutput.innerHTML = '';
+                resultOutput.innerHTML = '<div class="text-gray-400">Processing...</div>';
+                summarySection.classList.add('hidden');
+                summaryOutput.innerHTML = '';
+                
+                logToApp(`Processing query: '${user_query}'...`);
+                
+                const response = agent.query_customer_data(user_query);
+
+                if (response.status === "success") {
+                    lastQuery = user_query;
+                    lastResult = response.data;
+                    logOutput.innerHTML += `<div class="log-entry result"><strong>[Result]:</strong> Query successful.</div>`;
+                    resultOutput.innerHTML = `<pre>${JSON.stringify(response.data, null, 2)}</pre>`;
+                    summarySection.classList.remove('hidden');
+                } else {
+                    lastResult = null;
+                    logOutput.innerHTML += `<div class="log-entry result"><strong>[Result]:</strong> Error.</div>`;
+                    resultOutput.innerHTML = `<div class="text-red-400"><strong>Error:</strong> ${response.message}</div>`;
+                }
+                logOutput.scrollTop = logOutput.scrollHeight;
+            };
+            
+            const handleSuggestQueries = async () => {
+                suggestButton.disabled = true;
+                suggestLoader.classList.remove('hidden');
+                suggestionsContainer.innerHTML = '<div class="text-gray-500">✨ Thinking of good questions...</div>';
+
+                const schemaString = JSON.stringify(agent.schema, null, 2);
+                const prompt = `Based on the following database schema, generate 3 concise, natural language questions that a user might ask.
+
+Schema:
+${schemaString}
+
+Return the questions as a JSON object with a key "suggestions" which is an array of strings.`;
+                
+                const schemaForResponse = {
+                    type: "OBJECT",
+                    properties: { "suggestions": { type: "ARRAY", items: { type: "STRING" } } }
+                };
+
+                const result = await geminiAPI.call(prompt, schemaForResponse);
+                
+                suggestionsContainer.innerHTML = '';
+                if (result && result.suggestions) {
+                    result.suggestions.forEach(q => {
+                        const btn = document.createElement('button');
+                        btn.textContent = q;
+                        btn.className = 'suggestion-btn';
+                        btn.onclick = () => {
+                            queryInput.value = q;
+                            processQuery();
+                        };
+                        suggestionsContainer.appendChild(btn);
+                    });
+                } else {
+                    suggestionsContainer.innerHTML = '<div class="text-red-500">Could not generate suggestions.</div>';
+                }
+
+                suggestButton.disabled = false;
+                suggestLoader.classList.add('hidden');
+            };
+
+            const handleSummarizeResults = async () => {
+                if (!lastResult) return;
+                
+                summarizeButton.disabled = true;
+                summarizeLoader.classList.remove('hidden');
+                summaryOutput.innerHTML = '✨ Thinking of a good summary...';
+
+                const prompt = `A user asked the following question to a database:
+"${lastQuery}"
+
+The database returned this JSON result:
+${JSON.stringify(lastResult, null, 2)}
+
+Please provide a short, one-paragraph, natural language summary of what this result means. Be helpful and clear.`;
+                
+                const summaryText = await geminiAPI.call(prompt);
+
+                if (summaryText) {
+                    summaryOutput.innerHTML = summaryText;
+                } else {
+                    summaryOutput.innerHTML = '<div class="text-red-500">Could not generate a summary.</div>';
+                }
+
+                summarizeButton.disabled = false;
+                summarizeLoader.classList.add('hidden');
+            };
+
+            submitButton.addEventListener('click', processQuery);
+            queryInput.addEventListener('keydown', (e) => e.key === 'Enter' && processQuery());
+            suggestButton.addEventListener('click', handleSuggestQueries);
+            summarizeButton.addEventListener('click', handleSummarizeResults);
+        });
+    </script>
+</body>
+</html>
